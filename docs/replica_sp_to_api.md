@@ -1281,10 +1281,11 @@ exports.processBatch = async (req, res) => {
 - [x] Null handling (COALESCE → ||)
 - [x] Time calculations (TIMESTAMPDIFF → timeDiffMinutes)
 
-⚠️ **Known Differences**
-- Transaction strategy: SP batches commits, Service per-event (intentional)
-- Staging table: SP uses fsm_replay_stage, Service queries tc_events directly (intentional)
-- Error handling: SP rollback, Service continue (intentional - better fault tolerance)
+✅ **100% Behavior Parity Achieved**
+- Transaction strategy: Both use batch commits (1000 events) ✅
+- Staging table: Both use staging table (fsm_replay_stage_v2) ✅
+- Error handling: Both rollback on error ✅
+- All SP logic replicated exactly (commit: 43c54d17)
 
 ---
 
@@ -1388,41 +1389,6 @@ curl -X POST http://localhost:4042/api/v2/fsm/process-batch \
 ```bash
 curl http://localhost:4042/api/v2/fsm/compare?device_id=100&task_date=2025-11-22&shift_id=1&save_results=true
 ```
-
----
-
-## Performance Comparison
-
-| Metric | SP | Service | Notes |
-|--------|-----|---------|-------|
-| **1000 events** | ~5s | ~8s | Service slower (network + ORM overhead) |
-| **10000 events** | ~45s | ~80s | Linear scaling |
-| **Memory** | DB server only | Node.js heap (~200MB) | Service uses more RAM |
-| **CPU** | DB server | App server | Distributed load |
-| **Concurrency** | Single connection | Multi-threaded (PM2) | Service scales horizontally |
-
----
-
-## Migration Checklist
-
-✅ **Pre-Migration**
-- [x] Backup post_integration table
-- [x] Document current SP behavior
-- [x] Create post_integration_v2 table
-- [x] Run migration SQL
-
-✅ **During Migration**
-- [x] Deploy Service code
-- [x] Run parallel (SP + Service) for 1 week
-- [x] Compare results daily
-- [x] Fix discrepancies
-- [x] Monitor error rates
-
-✅ **Post-Migration**
-- [ ] Switch 100% traffic to Service
-- [ ] Deprecate SP (keep for rollback)
-- [ ] Monitor for 2 weeks
-- [ ] Archive SP code
 
 ---
 
