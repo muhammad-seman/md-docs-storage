@@ -343,3 +343,38 @@ Purpose: UCAN attachment failures
 | sp_build_ritase → _pis_reseq_bucket | Otomatis (internal call) | Setiap trip dibuat/update |
 | ucan_staging_old → sp_ucan_attach | Scheduled job | Batch 5-15 menit |
 | sp_ucan_attach → _pis_reseq_bucket | Otomatis (internal call) | Per UCAN attach
+
+Flow Bisnis (fsm_debug_log):**
+
+**1. Unit Mulai Bergerak**
+- Log: "SP_ANCHOR_ENTER" → Unit masuk geofence (ROM/PORT/COP)
+- Catat: nomor unit, waktu lokal, jenis lokasi
+
+**2. Sistem Cek Apakah Sudah Ada Trip Aktif**
+- **Ada trip aktif** → sambungkan ke trip yang sudah jalan
+- **Belum ada** → buka trip baru
+- Log: "ROM enter handled", "PORT enter handled"
+
+**3. Unit Pindah Lokasi (Chain Event)**
+- ROM keluar → PORT masuk → PORT keluar → COP
+- Setiap perpindahan dicek: apakah masih 1 ritase atau beda ritase?
+- Log: "ROM exit", "PORT exit", "COP handled"
+
+**4. Deteksi Anomali**
+- **Duplikat**: 2 event sama dalam waktu dekat → pilih 1, tandai sisanya
+- **Lompat**: PORT exit tanpa ROM → flag "missing ROM"
+- **Terlalu cepat**: ROM keluar < 3 menit → "ROM_SPIKE"
+- Log: "same-kind multi", "ROM_BOUNCE", "gap"
+
+**5. Tutup Ritase**
+- Sistem pilih mana yang jadi penutup resmi (COP > PORTKOSONG > PORT EXIT)
+- Gabung trip yang sebenarnya sama tapi terpisah
+- Log: "final merge", "Done resequence"
+
+**6. Urutkan Ritase (Reseq)**
+- Semua trip dalam 1 shift disusun ulang jadi ritase 1, 2, 3...
+- Berdasarkan waktu selesai (closing time)
+- Log: "Start resequence", "Done resequence rows=N"
+
+**Singkatnya:**  
+fsm_debug_log = **jejak digital unit dari loading sampai unloading**, termasuk kalau ada kesalahan sistem atau GPS bouncing.
